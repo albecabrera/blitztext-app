@@ -1,30 +1,37 @@
-# Blitztext App
+# Blitztext App — Offline Fork (Ollama + WhisperKit)
+
+> **This is a fork of [cmagnussen/blitztext-app](https://github.com/cmagnussen/blitztext-app) modified to run 100% offline — no OpenAI API key required.**
 
 Blitztext App is an experimental open-source macOS menubar app for turning speech into text.
 
-It is intentionally small and unfinished. The goal is to make a real workflow visible and hackable: press a hotkey, speak, get text back, optionally rewrite it, and paste it into the app you were using.
+Press a hotkey, speak, get text back, optionally rewrite it, and paste it into the app you were using. Everything runs on your machine.
 
-This is a learning and experimentation project, not a polished product.
+## What Changed From Upstream
 
-> Preview status: bring your own OpenAI API key, no hosted backend, no warranty, no support guarantee.
+| Component | Upstream | This Fork |
+|-----------|----------|-----------|
+| Transcription | OpenAI Whisper API or WhisperKit | **WhisperKit only (local)** |
+| Text rewriting | OpenAI GPT-4o / GPT-4o-mini | **Ollama (`qwen3.5:latest`)** |
+| API key required | Yes | **No** |
+| Internet required | Yes (online mode) | **No** |
+
+All rewriting workflows (Blitztext+, $%&!, :)) now use `LocalTranscriptionService` for speech-to-text and Ollama's native `/api/chat` endpoint for text generation, with `think: false` to disable reasoning mode for fast responses (~1-5s).
 
 ## What It Does
 
-- **Blitztext**: record speech and transcribe it.
-- **Blitztext+**: record speech, transcribe it, then turn the rough draft into cleaner writing.
-- **Blitztext $%&!**: turn frustrated speech into a calmer message.
-- **Blitztext :)**: add fitting emojis to dictated text.
+- **Blitztext** (`fn + Shift`): record speech, transcribe locally via WhisperKit.
+- **Blitztext+** (`fn + Control`): transcribe + improve text via Ollama.
+- **Blitztext $%&!** (`fn + Option`): turn frustrated speech into a calm message via Ollama.
+- **Blitztext :)** (`fn + Cmd`): transcribe + add emojis via Ollama.
 
-## Important Preview Notes
+## Important Notes
 
 - macOS only.
-- Bring your own OpenAI API key.
-- No hosted Blitztext backend is included or provided.
-- In online mode, audio and text are sent directly from the app to the OpenAI API.
-- Optional local transcription via WhisperKit/CoreML if you install a compatible model locally.
-- `./build.sh` creates a locally ad-hoc-signed development app. No notarized release binary is provided.
-- Not production ready.
-- No warranty and no support guarantee.
+- No OpenAI key needed — everything runs locally.
+- Ollama must be running in the background (`open -a Ollama`).
+- A WhisperKit CoreML model must be installed (see setup below).
+- `./build.sh` creates a locally ad-hoc-signed development app.
+- Not production ready. No warranty.
 
 You are welcome to use, fork, adapt, and share this project under the license terms.
 
@@ -46,45 +53,82 @@ The intent is not to ship a one-click finished app. The intent is to make a real
 ## Requirements
 
 - macOS 14 or newer
-- Xcode 16 or newer (Swift 5.10), with Command Line Tools installed and selected for `xcodebuild`
-- [XcodeGen](https://github.com/yonaskolb/XcodeGen) to generate the Xcode project
-- For online transcription and rewriting: an OpenAI API key with access to:
-  - `whisper-1` for transcription
-  - `gpt-4o-mini` and optionally `gpt-4o` for rewriting
-- For local-only transcription: a WhisperKit CoreML model in:
-  `~/Library/Application Support/Blitztext/models/whisperkit/`
+- Xcode 16 or newer, with Command Line Tools installed
+- [XcodeGen](https://github.com/yonaskolb/XcodeGen): `brew install xcodegen`
+- [Ollama](https://ollama.com) running locally with at least one LLM model
+- A WhisperKit CoreML model (installed via the app or manually, see below)
 
-The build also pulls one Swift Package dependency automatically:
+The build pulls one Swift Package dependency automatically:
 
-- [`argmax-oss-swift`](https://github.com/argmaxinc/argmax-oss-swift) (WhisperKit) — used for local on-device transcription.
+- [`argmax-oss-swift`](https://github.com/argmaxinc/argmax-oss-swift) (WhisperKit)
 
-Install XcodeGen if needed:
+## Setup
 
-```bash
-brew install xcodegen
-```
-
-## Build And Run
+### 1. Build and install
 
 ```bash
-git clone https://github.com/cmagnussen/blitztext-app.git
+git clone https://github.com/albecabrera/blitztext-app.git
 cd blitztext-app
-./build.sh --run
-```
-
-For a local install into `/Applications`:
-
-```bash
 ./build.sh --install --run
 ```
 
-The generated `.app` is ad-hoc signed for local development only. Do not treat it as a trusted redistributable binary. A public binary release would need Developer ID signing and notarization.
+### 2. Install Ollama and pull a model
 
-On first launch, either paste your own OpenAI API key for online workflows or install a WhisperKit CoreML model for local transcription. Rewriting workflows still require OpenAI.
+```bash
+# Install from https://ollama.com or via brew
+brew install ollama
+ollama pull qwen3.5:latest   # or any other model you prefer
+```
 
-For fully local transcription, install a WhisperKit CoreML model and enable **Sicherer Lokaler Modus** in the app.
+Open Ollama so it runs in the background before using Blitztext.
 
-For a slower, more explicit walkthrough, see [docs/setup.md](docs/setup.md).
+### 3. Install a WhisperKit model
+
+**Option A — from the app:** Settings → Anpassen → enable **Sicherer Lokaler Modus** → click install.
+
+**Option B — via CLI:**
+
+```bash
+pip install "huggingface_hub[cli]"
+mkdir -p "$HOME/Library/Application Support/Blitztext/models/whisperkit"
+python3 -c "
+from huggingface_hub import snapshot_download
+snapshot_download(
+    repo_id='argmaxinc/whisperkit-coreml',
+    allow_patterns=['openai_whisper-small_216MB/*'],
+    local_dir='$HOME/Library/Application Support/Blitztext/models/whisperkit'
+)
+"
+```
+
+Expected layout:
+
+```text
+~/Library/Application Support/Blitztext/models/whisperkit/
+  openai_whisper-small_216MB/
+    AudioEncoder.mlmodelc
+    MelSpectrogram.mlmodelc
+    TextDecoder.mlmodelc
+```
+
+### 4. Enable local mode
+
+Settings → Anpassen → toggle **Sicherer Lokaler Modus** ON.
+
+### 5. Grant permissions
+
+- **Microphone**: required to record your voice.
+- **Accessibility**: required to auto-paste results. Open System Settings → Privacy → Accessibility → enable Blitztext.
+
+### Changing the Ollama model
+
+Edit `BlitztextMac/Services/LLMService.swift`, line 1:
+
+```swift
+private let ollamaModel = "qwen3.5:latest"  // change to any ollama model name
+```
+
+Then rebuild: `./build.sh --install`
 
 ## Permissions
 
@@ -97,17 +141,12 @@ If you do not grant Accessibility permission, you can still copy results manuall
 
 ## Data Flow
 
-The preview has no custom backend.
+Everything stays on your machine. No data leaves your Mac.
 
 ```text
-Online transcription: Your Mac -> OpenAI Audio Transcriptions API
-Text rewriting:       Your Mac -> OpenAI Chat Completions API
-Local transcription:  Your Mac -> WhisperKit/CoreML on device
+Transcription:  Your Mac -> WhisperKit/CoreML (on device)
+Text rewriting: Your Mac -> Ollama (localhost:11434)
 ```
-
-The app stores your OpenAI API key in the user's macOS Keychain.
-
-Read [docs/privacy.md](docs/privacy.md) before using the preview with sensitive content.
 
 ## Project Structure
 
@@ -115,17 +154,11 @@ Read [docs/privacy.md](docs/privacy.md) before using the preview with sensitive 
 BlitztextMac/
   App/          App lifecycle and paste handling
   Features/     Workflows, menu bar UI, settings
-  Services/     Recording, OpenAI calls, hotkeys, local storage
+  Services/     Recording, Ollama calls, WhisperKit, hotkeys, local storage
   Views/        Shared SwiftUI views
 build.sh        Local build script
-docs/           Setup, privacy, roadmap, preflight, landing page notes
+docs/           Setup, privacy, roadmap notes
 ```
-
-## Local Models
-
-Local transcription is available as an experimental WhisperKit/CoreML path. The app does not bundle a model; choose one in the app, click install, and then switch on **Sicherer Lokaler Modus** from the menu bar or settings.
-
-See [docs/local-models.md](docs/local-models.md).
 
 ## Contributing
 

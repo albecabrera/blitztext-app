@@ -56,26 +56,16 @@ private struct SectionLabel: View {
 // MARK: - Access Settings (Tab 1: Zugang)
 
 struct AccessSettingsView: View {
-    private static let openAIAPIKeyPattern = #"^sk-[A-Za-z0-9_-]{20,}$"#
-
     @Bindable var appState: AppState
-
-    private enum FieldFocus {
-        case openAIAPIKey
-    }
 
     @State private var launchAtLoginService = LaunchAtLoginService()
     @State private var currentInstallLocation = BlitztextInstallLocationService.currentInstallLocation
-    @State private var openAIAPIKey = ""
-    @State private var editingAPIKey = false
     @State private var saved = false
-    @State private var saveErrorText: String?
     @State private var installActionErrorText: String?
     @State private var showCleanupOptions = false
     @State private var deleteLocalDataOnCleanup = true
     @State private var cleanupStatusText: String?
     @State private var cleanupErrorText: String?
-    @FocusState private var focusedField: FieldFocus?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
@@ -114,50 +104,25 @@ struct AccessSettingsView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    SectionLabel(text: "OpenAI API Key")
-                    Spacer()
-                    if appState.hasValue(for: .openAIAPIKey) && !editingAPIKey {
-                        Button("Aendern") { editingAPIKey = true }
-                            .font(.system(size: 10, weight: .medium))
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.blue)
-                    }
-                }
+                SectionLabel(text: "Ollama")
 
-                if appState.hasValue(for: .openAIAPIKey) && !editingAPIKey {
-                    HStack(spacing: 6) {
-                        Image(systemName: "lock.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.green.opacity(0.8))
-                        Text(appState.apiKeyDisplayValue(for: .openAIAPIKey))
-                            .font(.system(size: 11, design: .monospaced))
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "cpu.fill")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.green)
+                        .frame(width: 18, height: 18)
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Lokaler Modus aktiv.")
+                            .font(.system(size: 11.5, weight: .semibold))
+                            .foregroundStyle(.primary)
+
+                        Text("Texte werden lokal über Ollama (qwen3.5:latest) umformuliert. Kein API-Key nötig. Ollama muss im Hintergrund laufen.")
+                            .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
-                    }
-                    .padding(8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(
-                        RoundedRectangle(cornerRadius: 6)
-                            .fill(Color(nsColor: .controlBackgroundColor))
-                    )
-                } else {
-                    HStack(spacing: 8) {
-                        SecureField("sk-...", text: $openAIAPIKey)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 11.5))
-                            .focused($focusedField, equals: .openAIAPIKey)
-
-                        Button("Einfuegen") {
-                            pasteAPIKeyFromClipboard()
-                        }
-                        .buttonStyle(SubtleButtonStyle())
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                 }
-
-                Text("Dein Key bleibt lokal in dieser App. Audio und Text werden direkt an die OpenAI API gesendet.")
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -253,12 +218,7 @@ struct AccessSettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            if let saveErrorText {
-                Text(saveErrorText)
-                    .font(.system(size: 10.5))
-                    .foregroundStyle(.red)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+
 
             VStack(alignment: .leading, spacing: 6) {
                 SectionLabel(text: "Hinweis")
@@ -358,68 +318,16 @@ struct AccessSettingsView: View {
         .onAppear {
             launchAtLoginService.refresh()
             refreshInstallState()
-            load()
-            if !appState.hasValue(for: .openAIAPIKey) {
-                editingAPIKey = true
-                focusedField = .openAIAPIKey
-            }
         }
-    }
-
-    private func load() {
-        openAIAPIKey = ""
     }
 
     private func save() {
-        saveErrorText = nil
         cleanupStatusText = nil
         cleanupErrorText = nil
-        KeychainService.invalidateCache()
-        let trimmedAPIKey = openAIAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        if editingAPIKey || !appState.hasValue(for: .openAIAPIKey) {
-            guard !trimmedAPIKey.isEmpty else {
-                saveErrorText = "Bitte trage deinen OpenAI API Key ein."
-                return
-            }
-            do {
-                try KeychainService.save(key: .openAIAPIKey, value: trimmedAPIKey)
-                openAIAPIKey = ""
-                editingAPIKey = false
-            } catch {
-                saveErrorText = "OpenAI API Key konnte nicht gespeichert werden."
-                return
-            }
-        }
-
-        KeychainService.invalidateCache()
-        if !appState.hasValue(for: .openAIAPIKey) {
-            saveErrorText = "OpenAI API Key wurde nicht persistent gespeichert. Bitte App neu starten und erneut versuchen."
-            return
-        }
-
         withAnimation(.easeInOut(duration: 0.2)) { saved = true }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
             withAnimation(.easeInOut(duration: 0.2)) { saved = false }
         }
-    }
-
-    private func pasteAPIKeyFromClipboard() {
-        guard let rawText = NSPasteboard.general.string(forType: .string) else {
-            saveErrorText = "Zwischenablage enthält keinen Text."
-            return
-        }
-
-        let firstLine = rawText.components(separatedBy: .newlines).first ?? rawText
-        let trimmedKey = firstLine.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmedKey.range(of: Self.openAIAPIKeyPattern, options: .regularExpression) != nil else {
-            saveErrorText = "Zwischenablage enthält keinen plausiblen OpenAI API Key."
-            return
-        }
-
-        openAIAPIKey = trimmedKey
-        NSPasteboard.general.clearContents()
-        saveErrorText = nil
     }
 
     private var installationHeadline: String {
@@ -477,11 +385,6 @@ struct AccessSettingsView: View {
         KeychainService.invalidateCache()
         launchAtLoginService.refresh()
         refreshInstallState()
-
-        if deleteLocalDataOnCleanup {
-            openAIAPIKey = ""
-            editingAPIKey = true
-        }
 
         if report.failedItems.isEmpty {
             cleanupStatusText = deleteLocalDataOnCleanup

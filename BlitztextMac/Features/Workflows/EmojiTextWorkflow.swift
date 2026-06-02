@@ -16,12 +16,14 @@ final class EmojiTextWorkflow: Workflow {
     private let settings: EmojiTextSettings
     private let customTerms: [String]
     private let language: String
+    private let localModelName: String
     private var processingTask: Task<Void, Never>?
 
-    init(settings: EmojiTextSettings, customTerms: [String] = [], language: String = "de") {
+    init(settings: EmojiTextSettings, customTerms: [String] = [], language: String = "de", localModelName: String = LocalTranscriptionService.recommendedFastModelName) {
         self.settings = settings
         self.customTerms = customTerms
         self.language = language
+        self.localModelName = localModelName
     }
 
     // MARK: - Recording State
@@ -82,11 +84,11 @@ final class EmojiTextWorkflow: Workflow {
             }
 
             do {
-                // Phase 1: Whisper transcription
-                let rawText = try await TranscriptionService.transcribe(
+                // Phase 1: local Whisper transcription
+                let rawText = try await LocalTranscriptionService.shared.transcribe(
                     audioURL: url,
-                    customTerms: vocabularyHints,
-                    language: language
+                    language: language,
+                    modelName: localModelName
                 )
                 let cleanedRawText = TranscriptionQualityService.cleanedTranscript(rawText)
                 guard !TranscriptionQualityService.isLikelyArtifact(cleanedRawText, recordingDuration: recordingDuration) else {

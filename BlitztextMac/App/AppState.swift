@@ -64,7 +64,7 @@ final class AppState {
 
     // Computed
     var isConfigured: Bool {
-        KeychainService.isConfigured || !LocalTranscriptionService.installedModels().isEmpty
+        !LocalTranscriptionService.installedModels().isEmpty
     }
     var shouldShowOnboarding: Bool {
         !isConfigured && !appSettings.hasSeenOnboarding
@@ -116,10 +116,7 @@ final class AppState {
         case .localTranscription:
             return "Nur lokal. Kein Server."
         case .textImprover, .dampfAblassen, .emojiText:
-            if appSettings.secureLocalModeEnabled {
-                return "Im lokalen Modus pausiert."
-            }
-            return type.subtitle
+            return selectedLocalModelIsInstalled ? "Lokal via Ollama." : "WhisperKit-Modell erforderlich."
         }
     }
 
@@ -192,7 +189,8 @@ final class AppState {
         case .textImprover:
             let workflow = TextImprovementWorkflow(
                 settings: textImprovementSettings,
-                language: transcriptionSettings.language
+                language: transcriptionSettings.language,
+                localModelName: selectedLocalModelName
             )
             configureWorkflowHandlers(workflow)
             activeWorkflow = workflow
@@ -202,7 +200,8 @@ final class AppState {
             let workflow = DampfAblassenWorkflow(
                 settings: dampfAblassenSettings,
                 customTerms: textImprovementSettings.customTerms,
-                language: transcriptionSettings.language
+                language: transcriptionSettings.language,
+                localModelName: selectedLocalModelName
             )
             configureWorkflowHandlers(workflow)
             activeWorkflow = workflow
@@ -212,7 +211,8 @@ final class AppState {
             let workflow = EmojiTextWorkflow(
                 settings: emojiTextSettings,
                 customTerms: textImprovementSettings.customTerms,
-                language: transcriptionSettings.language
+                language: transcriptionSettings.language,
+                localModelName: selectedLocalModelName
             )
             configureWorkflowHandlers(workflow)
             activeWorkflow = workflow
@@ -231,7 +231,7 @@ final class AppState {
                 ? selectedLocalModelIsInstalled
                 : KeychainService.isConfigured
         case .textImprover, .dampfAblassen, .emojiText:
-            return !appSettings.secureLocalModeEnabled && KeychainService.isConfigured
+            return selectedLocalModelIsInstalled
         }
     }
 

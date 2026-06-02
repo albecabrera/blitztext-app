@@ -15,11 +15,13 @@ final class TextImprovementWorkflow: Workflow {
     private let recorder = AudioRecorder()
     private let settings: TextImprovementSettings
     private let language: String
+    private let localModelName: String
     private var processingTask: Task<Void, Never>?
 
-    init(settings: TextImprovementSettings, language: String = "de") {
+    init(settings: TextImprovementSettings, language: String = "de", localModelName: String = LocalTranscriptionService.recommendedFastModelName) {
         self.settings = settings
         self.language = language
+        self.localModelName = localModelName
     }
 
     // MARK: - Recording State
@@ -80,11 +82,11 @@ final class TextImprovementWorkflow: Workflow {
             }
 
             do {
-                // Phase 1: Whisper transcription
-                let rawText = try await TranscriptionService.transcribe(
+                // Phase 1: local Whisper transcription
+                let rawText = try await LocalTranscriptionService.shared.transcribe(
                     audioURL: url,
-                    customTerms: vocabularyHints,
-                    language: language
+                    language: language,
+                    modelName: localModelName
                 )
                 let cleanedRawText = TranscriptionQualityService.cleanedTranscript(rawText)
                 guard !TranscriptionQualityService.isLikelyArtifact(cleanedRawText, recordingDuration: recordingDuration) else {
